@@ -4,10 +4,14 @@ Rolling window experiment runner — fits all models across all zones
 using an expanding training window.
 
 Rolling window structure (4 windows):
-  Window 1: train=2020–2021, val=2022, test=2022
-  Window 2: train=2020–2022, val=2023, test=2023
-  Window 3: train=2020–2023, val=2024, test=2024
-  Window 4: train=2020–2024, val=2025, test=2025  ← final window
+  Window 1: train=2020,      val=2021, test=2022
+  Window 2: train=2020–2021, val=2022, test=2023
+  Window 3: train=2020–2022, val=2023, test=2024
+  Window 4: train=2020–2023, val=2024, test=2025   ← final window, matches main split
+
+Val is always the year immediately after training and always distinct from
+test — it is used only for LSTM early stopping and MLP GridSearchCV, never
+for reported metrics. Test is always a fresh, unseen year.
 
 For each window × zone combination:
   1. Slice train/val/test from processed dataset

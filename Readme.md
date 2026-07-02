@@ -20,18 +20,20 @@ This project implements a complete forecasting pipeline: data preprocessing, fea
 
 ## Rolling Window Evaluation
 
-Instead of a single train/test split, models are evaluated across four expanding windows. Each window adds one year of training data and tests on the following year:
+Instead of a single train/test split, models are evaluated across four expanding windows. Each window adds one year of training data; validation is always the year immediately after training (used only for tuning, never reported); test is the year after that — always a completely fresh, unseen year:
 
 | Window | Train | Val | Test |
 |--------|-------|-----|------|
-| Window 1 | 2020 | 2022 | 2022 |
-| Window 2 | 2020–2021 | 2023 | 2023 |
-| Window 3 | 2020–2022 | 2024 | 2024 |
-| Window 4 | 2020–2023 | 2025 | 2025 |
+| Window 1 | 2020 | 2021 | 2022 |
+| Window 2 | 2020–2021 | 2022 | 2023 |
+| Window 3 | 2020–2022 | 2023 | 2024 |
+| Window 4 | 2020–2023 | 2024 | 2025 |
 
 This reveals how performance changes as training data grows, and exposes how models behave during structural market regime changes (e.g. the 2021–2022 energy crisis).
 
-**Val** is used only for LSTM early stopping and MLP hyperparameter tuning — never for final metric reporting.
+**Val** is used only for LSTM early stopping and MLP hyperparameter tuning — never for final metric reporting. Val and test are always distinct, non-overlapping calendar years in every window; an earlier version of this pipeline set val and test to the *same* year, which meant LSTM/MLP tuning was effectively peeking at the test set. That has been fixed — see `config.py`.
+
+Window 4 intentionally matches the main train/val/test split below (train ≤2023, val=2024, test=2025), so its results are directly comparable to a single-split evaluation.
 
 ---
 
@@ -126,7 +128,7 @@ Single source of truth for all constants. Edit here — changes propagate everyw
 | `TRAIN_END` | `"2023-12-31 23:59:59"` | End of main training period |
 | `VAL_START/END` | `"2024-*"` | Main validation period |
 | `TEST_START/END` | `"2025-*"` | Main test period |
-| `ROLLING_WINDOWS` | List of 4 window dicts | Rolling window boundaries |
+| `ROLLING_WINDOWS` | List of 4 window dicts — train/val/test always distinct years | Rolling window boundaries |
 | `TIMEZONE` | `"Europe/Oslo"` | CET/CEST for time feature extraction |
 | `FFILL_LIMIT_WIND` | `48` | Max hours to forward-fill wind gaps |
 | `FFILL_LIMIT_LOAD` | `3` | Max hours to forward-fill load gaps |
@@ -353,6 +355,9 @@ k-fold randomly places future hours in training folds — data leakage. TimeSeri
 
 **Why 168-row warmup drop?**
 `price_lag168` requires 168 rows (7 days) of history before the first valid value exists. Rows 1–168 of each zone have NaN in this column. Dropping them removes Jan 1–7 2020 per zone — less than 0.3% of data.
+
+**Why val ≠ test year in every rolling window?**
+Val is used to early-stop the LSTM and to score MLP's GridSearchCV. If val and test were the same year (as in an earlier version of this pipeline), the LSTM and MLP would effectively be tuned on the test set itself, inflating their reported accuracy relative to naive/XGBoost. Keeping val strictly one year before test removes that leakage.
 
 ---
 
